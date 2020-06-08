@@ -69,66 +69,67 @@ def rankABot(aBot, dataset, split, scoringFunction, exampleLimit=None):
     ranks = []
     logProbsAll = [[] for _ in range(numRounds)]
     start_t = timer()
-    for idx, batch in enumerate(dataloader):
-        if idx == numBatches:
-            break
+    with torch.no_grad():
+        for idx, batch in enumerate(dataloader):
+            if idx == numBatches:
+                break
 
-        if dataset.useGPU:
-            batch = {
-                key: v.cuda() if hasattr(v, 'cuda') else v
-                for key, v in batch.items()
-            }
-        else:
-            batch = {
-                key: v.contiguous() if hasattr(v, 'cuda') else v
-                for key, v in batch.items()
-            }
+            if dataset.useGPU:
+                batch = {
+                    key: v.cuda() if hasattr(v, 'cuda') else v
+                    for key, v in batch.items()
+                }
+            else:
+                batch = {
+                    key: v.contiguous() if hasattr(v, 'cuda') else v
+                    for key, v in batch.items()
+                }
 
-        image = Variable(batch['img_feat'], volatile=True)
-        caption = Variable(batch['cap'], volatile=True)
-        captionLens = Variable(batch['cap_len'], volatile=True)
-        questions = Variable(batch['ques'], volatile=True)
-        quesLens = Variable(batch['ques_len'], volatile=True)
-        answers = Variable(batch['ans'], volatile=True)
-        ansLens = Variable(batch['ans_len'], volatile=True)
-        options = Variable(batch['opt'], volatile=True)
-        optionLens = Variable(batch['opt_len'], volatile=True)
-        correctOptionInds = Variable(batch['ans_id'], volatile=True)
-        aBot.reset()
-        aBot.observe(-1, image=image, caption=caption, captionLens=captionLens)
-        for round in range(numRounds):
-            aBot.observe(
-                round,
-                ques=questions[:, round],
-                quesLens=quesLens[:, round],
-                ans=answers[:, round],
-                ansLens=ansLens[:, round])
-            logProbs = aBot.evalOptions(options[:, round],
-                                        optionLens[:, round], scoringFunction)
-            logProbsCurrent = aBot.forward()
-            logProbsAll[round].append(
-                scoringFunction(logProbsCurrent,
-                                answers[:, round].contiguous()))
-            batchRanks = rankOptions(options[:, round],
-                                     correctOptionInds[:, round], logProbs)
-            ranks.append(batchRanks)
+            image = Variable(batch['img_feat'])
+            caption = Variable(batch['cap'])
+            captionLens = Variable(batch['cap_len'])
+            questions = Variable(batch['ques'])
+            quesLens = Variable(batch['ques_len'])
+            answers = Variable(batch['ans'])
+            ansLens = Variable(batch['ans_len'])
+            options = Variable(batch['opt'])
+            optionLens = Variable(batch['opt_len'])
+            correctOptionInds = Variable(batch['ans_id'])
+            aBot.reset()
+            aBot.observe(-1, image=image, caption=caption, captionLens=captionLens)
+            for round in range(numRounds):
+                aBot.observe(
+                    round,
+                    ques=questions[:, round],
+                    quesLens=quesLens[:, round],
+                    ans=answers[:, round],
+                    ansLens=ansLens[:, round])
+                logProbs = aBot.evalOptions(options[:, round],
+                                            optionLens[:, round], scoringFunction)
+                logProbsCurrent = aBot.forward()
+                logProbsAll[round].append(
+                    scoringFunction(logProbsCurrent,
+                                    answers[:, round].contiguous()))
+                batchRanks = rankOptions(options[:, round],
+                                        correctOptionInds[:, round], logProbs)
+                ranks.append(batchRanks)
 
-        end_t = timer()
-        delta_t = " Rate: %5.2fs" % (end_t - start_t)
-        start_t = end_t
-        progressString = "\r[Abot] Evaluating split '%s' [%d/%d]\t" + delta_t
-        sys.stdout.write(progressString % (split, idx + 1, numBatches))
-        sys.stdout.flush()
-    sys.stdout.write("\n")
-    dataloader = None
-    print("Sleeping for 3 seconds to let dataloader subprocesses exit...")
-    ranks = torch.cat(ranks, 0)
-    rankMetrics = metrics.computeMetrics(ranks.cpu())
+            end_t = timer()
+            delta_t = " Rate: %5.2fs" % (end_t - start_t)
+            start_t = end_t
+            progressString = "\r[Abot] Evaluating split '%s' [%d/%d]\t" + delta_t
+            sys.stdout.write(progressString % (split, idx + 1, numBatches))
+            sys.stdout.flush()
+        sys.stdout.write("\n")
+        dataloader = None
+        print("Sleeping for 3 seconds to let dataloader subprocesses exit...")
+        ranks = torch.cat(ranks, 0)
+        rankMetrics = metrics.computeMetrics(ranks.cpu())
 
-    logProbsAll = [torch.stack(lprobs, 0).mean() for lprobs in logProbsAll]
-    roundwiseLogProbs = torch.stack(logProbsAll, 0).data.cpu().numpy()
-    logProbsMean = roundwiseLogProbs.mean()
-    rankMetrics['logProbsMean'] = logProbsMean
+        logProbsAll = [torch.stack(lprobs, 0).mean() for lprobs in logProbsAll]
+        roundwiseLogProbs = torch.stack(logProbsAll, 0).data.cpu().numpy()
+        logProbsMean = roundwiseLogProbs.mean()
+        rankMetrics['logProbsMean'] = logProbsMean
 
-    dataset.split = original_split
-    return rankMetrics
+        dataset.split = original_split
+        return rankMetrics
