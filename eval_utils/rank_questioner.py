@@ -1,5 +1,3 @@
-#rank questioner 
-
 import sys
 import json
 import h5py
@@ -116,51 +114,51 @@ def rankQBot(qBot, dataset, split, exampleLimit=None, verbose=0):
             progressString = "\r[Qbot] Evaluating split '%s' [%d/%d]\t" + delta_t
             sys.stdout.write(progressString % (split, idx + 1, numBatches))
             sys.stdout.flush()
-    sys.stdout.write("\n")
+        sys.stdout.write("\n")
 
-    gtFeatures = torch.cat(gtImgFeatures, 0).data.cpu().numpy()
-    rankMetricsRounds = []
-    poolSize = len(dataset)
+        gtFeatures = torch.cat(gtImgFeatures, 0).data.cpu().numpy()
+        rankMetricsRounds = []
+        poolSize = len(dataset)
 
-    # Keeping tracking of feature regression loss and CE logprobs
-    logProbsAll = [torch.stack(lprobs, 0).mean() for lprobs in logProbsAll]
-    featLossAll = [torch.stack(floss, 0).mean() for floss in featLossAll]
-    roundwiseLogProbs = torch.stack(logProbsAll, 0).data.cpu().numpy()
-    roundwiseFeatLoss = torch.stack(featLossAll, 0).data.cpu().numpy()
-    logProbsMean = roundwiseLogProbs.mean()
-    featLossMean = roundwiseFeatLoss.mean()
+        # Keeping tracking of feature regression loss and CE logprobs
+        logProbsAll = [torch.stack(lprobs, 0).mean() for lprobs in logProbsAll]
+        featLossAll = [torch.stack(floss, 0).mean() for floss in featLossAll]
+        roundwiseLogProbs = torch.stack(logProbsAll, 0).data.cpu().numpy()
+        roundwiseFeatLoss = torch.stack(featLossAll, 0).data.cpu().numpy()
+        logProbsMean = roundwiseLogProbs.mean()
+        featLossMean = roundwiseFeatLoss.mean()
 
-    if verbose:
-        print("Percentile mean rank (round, mean, low, high)")
-    for round in range(numRounds + 1):
-        predFeatures = torch.cat(roundwiseFeaturePreds[round],
-                                 0).data.cpu().numpy()
-        # num_examples x num_examples
-        dists = pairwise_distances(predFeatures, gtFeatures)
-        ranks = []
-        for i in range(dists.shape[0]):
-            rank = int(np.where(dists[i, :].argsort() == i)[0]) + 1
-            ranks.append(rank)
-        ranks = np.array(ranks)
-        rankMetrics = metrics.computeMetrics(Variable(torch.from_numpy(ranks)))
-        meanRank = ranks.mean()
-        se = ranks.std() / np.sqrt(poolSize)
-        meanPercRank = 100 * (1 - (meanRank / poolSize))
-        percRankLow = 100 * (1 - ((meanRank + se) / poolSize))
-        percRankHigh = 100 * (1 - ((meanRank - se) / poolSize))
         if verbose:
-            print((round, meanPercRank, percRankLow, percRankHigh))
-        rankMetrics['percentile'] = meanPercRank
-        rankMetrics['featLoss'] = roundwiseFeatLoss[round]
-        if round < len(roundwiseLogProbs):
-            rankMetrics['logProbs'] = roundwiseLogProbs[round]
-        rankMetricsRounds.append(rankMetrics)
+            print("Percentile mean rank (round, mean, low, high)")
+        for round in range(numRounds + 1):
+            predFeatures = torch.cat(roundwiseFeaturePreds[round],
+                                    0).data.cpu().numpy()
+            # num_examples x num_examples
+            dists = pairwise_distances(predFeatures, gtFeatures)
+            ranks = []
+            for i in range(dists.shape[0]):
+                rank = int(np.where(dists[i, :].argsort() == i)[0]) + 1
+                ranks.append(rank)
+            ranks = np.array(ranks)
+            rankMetrics = metrics.computeMetrics(Variable(torch.from_numpy(ranks)))
+            meanRank = ranks.mean()
+            se = ranks.std() / np.sqrt(poolSize)
+            meanPercRank = 100 * (1 - (meanRank / poolSize))
+            percRankLow = 100 * (1 - ((meanRank + se) / poolSize))
+            percRankHigh = 100 * (1 - ((meanRank - se) / poolSize))
+            if verbose:
+                print((round, meanPercRank, percRankLow, percRankHigh))
+            rankMetrics['percentile'] = meanPercRank
+            rankMetrics['featLoss'] = roundwiseFeatLoss[round]
+            if round < len(roundwiseLogProbs):
+                rankMetrics['logProbs'] = roundwiseLogProbs[round]
+            rankMetricsRounds.append(rankMetrics)
 
-    rankMetricsRounds[-1]['logProbsMean'] = logProbsMean
-    rankMetricsRounds[-1]['featLossMean'] = featLossMean
+        rankMetricsRounds[-1]['logProbsMean'] = logProbsMean
+        rankMetricsRounds[-1]['featLossMean'] = featLossMean
 
-    dataset.split = original_split
-    return rankMetricsRounds[-1], rankMetricsRounds
+        dataset.split = original_split
+        return rankMetricsRounds[-1], rankMetricsRounds
 
 
 def rankQABots(qBot, aBot, dataset, split, exampleLimit=None, beamSize=1):
@@ -250,34 +248,34 @@ def rankQABots(qBot, aBot, dataset, split, exampleLimit=None, beamSize=1):
             progressString = "\r[Qbot] Evaluating split '%s' [%d/%d]\t" + delta_t
             sys.stdout.write(progressString % (split, idx + 1, numBatches))
             sys.stdout.flush()
-    sys.stdout.write("\n")
+        sys.stdout.write("\n")
 
-    gtFeatures = torch.cat(gtImgFeatures, 0).data.cpu().numpy()
-    rankMetricsRounds = []
+        gtFeatures = torch.cat(gtImgFeatures, 0).data.cpu().numpy()
+        rankMetricsRounds = []
 
-    print("Percentile mean rank (round, mean, low, high)")
-    for round in range(numRounds + 1):
-        predFeatures = torch.cat(roundwiseFeaturePreds[round],
-                                 0).data.cpu().numpy()
-        dists = pairwise_distances(predFeatures, gtFeatures)
-        # num_examples x num_examples
-        ranks = []
-        for i in range(dists.shape[0]):
-            # Computing rank of i-th prediction vs all images in split
-            rank = int(np.where(dists[i, :].argsort() == i)[0]) + 1
-            ranks.append(rank)
-        ranks = np.array(ranks)
-        rankMetrics = metrics.computeMetrics(Variable(torch.from_numpy(ranks)))
-        assert len(ranks) == len(dataset)
-        poolSize = len(dataset)
-        meanRank = ranks.mean()
-        se = ranks.std() / np.sqrt(poolSize)
-        meanPercRank = 100 * (1 - (meanRank / poolSize))
-        percRankLow = 100 * (1 - ((meanRank + se) / poolSize))
-        percRankHigh = 100 * (1 - ((meanRank - se) / poolSize))
-        print((round, meanPercRank, percRankLow, percRankHigh))
-        rankMetrics['percentile'] = meanPercRank
-        rankMetricsRounds.append(rankMetrics)
+        print("Percentile mean rank (round, mean, low, high)")
+        for round in range(numRounds + 1):
+            predFeatures = torch.cat(roundwiseFeaturePreds[round],
+                                    0).data.cpu().numpy()
+            dists = pairwise_distances(predFeatures, gtFeatures)
+            # num_examples x num_examples
+            ranks = []
+            for i in range(dists.shape[0]):
+                # Computing rank of i-th prediction vs all images in split
+                rank = int(np.where(dists[i, :].argsort() == i)[0]) + 1
+                ranks.append(rank)
+            ranks = np.array(ranks)
+            rankMetrics = metrics.computeMetrics(Variable(torch.from_numpy(ranks)))
+            assert len(ranks) == len(dataset)
+            poolSize = len(dataset)
+            meanRank = ranks.mean()
+            se = ranks.std() / np.sqrt(poolSize)
+            meanPercRank = 100 * (1 - (meanRank / poolSize))
+            percRankLow = 100 * (1 - ((meanRank + se) / poolSize))
+            percRankHigh = 100 * (1 - ((meanRank - se) / poolSize))
+            print((round, meanPercRank, percRankLow, percRankHigh))
+            rankMetrics['percentile'] = meanPercRank
+            rankMetricsRounds.append(rankMetrics)
 
-    dataset.split = original_split
-    return rankMetricsRounds[-1], rankMetricsRounds
+        dataset.split = original_split
+        return rankMetricsRounds[-1], rankMetricsRounds
