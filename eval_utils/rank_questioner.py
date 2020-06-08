@@ -1,3 +1,5 @@
+#rank questioner 
+
 import sys
 import json
 import h5py
@@ -58,61 +60,62 @@ def rankQBot(qBot, dataset, split, exampleLimit=None, verbose=0):
     logProbsAll = [[] for _ in range(numRounds)]
     featLossAll = [[] for _ in range(numRounds + 1)]
     start_t = timer()
-    for idx, batch in enumerate(dataloader):
-        if idx == numBatches:
-            break
+    with torch.no_grad():
+        for idx, batch in enumerate(dataloader):
+            if idx == numBatches:
+                break
 
-        if dataset.useGPU:
-            batch = {
-                key: v.cuda()
-                for key, v in batch.items() if hasattr(v, 'cuda')
-            }
-        else:
-            batch = {
-                key: v.contiguous()
-                for key, v in batch.items() if hasattr(v, 'cuda')
-            }
-        caption = Variable(batch['cap'], volatile=True)
-        captionLens = Variable(batch['cap_len'], volatile=True)
-        gtQuestions = Variable(batch['ques'], volatile=True)
-        gtQuesLens = Variable(batch['ques_len'], volatile=True)
-        answers = Variable(batch['ans'], volatile=True)
-        ansLens = Variable(batch['ans_len'], volatile=True)
-        gtFeatures = Variable(batch['img_feat'], volatile=True)
-        qBot.reset()
-        qBot.observe(-1, caption=caption, captionLens=captionLens)
-        predFeatures = qBot.predictImage()
-        # Evaluating round 0 feature regression network
-        featLoss = F.mse_loss(predFeatures, gtFeatures)
-        featLossAll[0].append(torch.mean(featLoss))
-        # Keeping round 0 predictions
-        roundwiseFeaturePreds[0].append(predFeatures)
-        for round in range(numRounds):
-            qBot.observe(
-                round,
-                ques=gtQuestions[:, round],
-                quesLens=gtQuesLens[:, round])
-            qBot.observe(
-                round, ans=answers[:, round], ansLens=ansLens[:, round])
-            logProbsCurrent = qBot.forward()
-            # Evaluating logProbs for cross entropy
-            logProbsAll[round].append(
-                utils.maskedNll(logProbsCurrent,
-                                gtQuestions[:, round].contiguous()))
+            if dataset.useGPU:
+                batch = {
+                    key: v.cuda()
+                    for key, v in batch.items() if hasattr(v, 'cuda')
+                }
+            else:
+                batch = {
+                    key: v.contiguous()
+                    for key, v in batch.items() if hasattr(v, 'cuda')
+                }
+            caption = Variable(batch['cap'])
+            captionLens = Variable(batch['cap_len'])
+            gtQuestions = Variable(batch['ques'])
+            gtQuesLens = Variable(batch['ques_len'])
+            answers = Variable(batch['ans'])
+            ansLens = Variable(batch['ans_len'])
+            gtFeatures = Variable(batch['img_feat'])
+            qBot.reset()
+            qBot.observe(-1, caption=caption, captionLens=captionLens)
             predFeatures = qBot.predictImage()
-            # Evaluating feature regression network
+            # Evaluating round 0 feature regression network
             featLoss = F.mse_loss(predFeatures, gtFeatures)
-            featLossAll[round + 1].append(torch.mean(featLoss))
-            # Keeping predictions
-            roundwiseFeaturePreds[round + 1].append(predFeatures)
-        gtImgFeatures.append(gtFeatures)
+            featLossAll[0].append(torch.mean(featLoss))
+            # Keeping round 0 predictions
+            roundwiseFeaturePreds[0].append(predFeatures)
+            for round in range(numRounds):
+                qBot.observe(
+                    round,
+                    ques=gtQuestions[:, round],
+                    quesLens=gtQuesLens[:, round])
+                qBot.observe(
+                    round, ans=answers[:, round], ansLens=ansLens[:, round])
+                logProbsCurrent = qBot.forward()
+                # Evaluating logProbs for cross entropy
+                logProbsAll[round].append(
+                    utils.maskedNll(logProbsCurrent,
+                                    gtQuestions[:, round].contiguous()))
+                predFeatures = qBot.predictImage()
+                # Evaluating feature regression network
+                featLoss = F.mse_loss(predFeatures, gtFeatures)
+                featLossAll[round + 1].append(torch.mean(featLoss))
+                # Keeping predictions
+                roundwiseFeaturePreds[round + 1].append(predFeatures)
+            gtImgFeatures.append(gtFeatures)
 
-        end_t = timer()
-        delta_t = " Time: %5.2fs" % (end_t - start_t)
-        start_t = end_t
-        progressString = "\r[Qbot] Evaluating split '%s' [%d/%d]\t" + delta_t
-        sys.stdout.write(progressString % (split, idx + 1, numBatches))
-        sys.stdout.flush()
+            end_t = timer()
+            delta_t = " Time: %5.2fs" % (end_t - start_t)
+            start_t = end_t
+            progressString = "\r[Qbot] Evaluating split '%s' [%d/%d]\t" + delta_t
+            sys.stdout.write(progressString % (split, idx + 1, numBatches))
+            sys.stdout.flush()
     sys.stdout.write("\n")
 
     gtFeatures = torch.cat(gtImgFeatures, 0).data.cpu().numpy()
@@ -120,10 +123,10 @@ def rankQBot(qBot, dataset, split, exampleLimit=None, verbose=0):
     poolSize = len(dataset)
 
     # Keeping tracking of feature regression loss and CE logprobs
-    logProbsAll = [torch.cat(lprobs, 0).mean() for lprobs in logProbsAll]
-    featLossAll = [torch.cat(floss, 0).mean() for floss in featLossAll]
-    roundwiseLogProbs = torch.cat(logProbsAll, 0).data.cpu().numpy()
-    roundwiseFeatLoss = torch.cat(featLossAll, 0).data.cpu().numpy()
+    logProbsAll = [torch.stack(lprobs, 0).mean() for lprobs in logProbsAll]
+    featLossAll = [torch.stack(floss, 0).mean() for floss in featLossAll]
+    roundwiseLogProbs = torch.stack(logProbsAll, 0).data.cpu().numpy()
+    roundwiseFeatLoss = torch.stack(featLossAll, 0).data.cpu().numpy()
     logProbsMean = roundwiseLogProbs.mean()
     featLossMean = roundwiseFeatLoss.mean()
 
@@ -199,53 +202,54 @@ def rankQABots(qBot, aBot, dataset, split, exampleLimit=None, beamSize=1):
     roundwiseFeaturePreds = [[] for _ in range(numRounds + 1)]
 
     start_t = timer()
-    for idx, batch in enumerate(dataloader):
-        if idx == numBatches:
-            break
+    with torch.no_grad():
+        for idx, batch in enumerate(dataloader):
+            if idx == numBatches:
+                break
 
-        if dataset.useGPU:
-            batch = {key: v.cuda() for key, v in batch.items() \
-                                            if hasattr(v, 'cuda')}
-        else:
-            batch = {key: v.contiguous() for key, v in batch.items() \
-                                            if hasattr(v, 'cuda')}
+            if dataset.useGPU:
+                batch = {key: v.cuda() for key, v in batch.items() \
+                                                if hasattr(v, 'cuda')}
+            else:
+                batch = {key: v.contiguous() for key, v in batch.items() \
+                                                if hasattr(v, 'cuda')}
 
-        caption = Variable(batch['cap'], volatile=True)
-        captionLens = Variable(batch['cap_len'], volatile=True)
-        gtQuestions = Variable(batch['ques'], volatile=True)
-        gtQuesLens = Variable(batch['ques_len'], volatile=True)
-        answers = Variable(batch['ans'], volatile=True)
-        ansLens = Variable(batch['ans_len'], volatile=True)
-        gtFeatures = Variable(batch['img_feat'], volatile=True)
-        image = Variable(batch['img_feat'], volatile=True)
+            caption = Variable(batch['cap'])
+            captionLens = Variable(batch['cap_len'])
+            gtQuestions = Variable(batch['ques'])
+            gtQuesLens = Variable(batch['ques_len'])
+            answers = Variable(batch['ans'])
+            ansLens = Variable(batch['ans_len'])
+            gtFeatures = Variable(batch['img_feat'])
+            image = Variable(batch['img_feat'])
 
-        aBot.eval(), aBot.reset()
-        aBot.observe(-1, image=image, caption=caption, captionLens=captionLens)
-        qBot.eval(), qBot.reset()
-        qBot.observe(-1, caption=caption, captionLens=captionLens)
+            aBot.eval(), aBot.reset()
+            aBot.observe(-1, image=image, caption=caption, captionLens=captionLens)
+            qBot.eval(), qBot.reset()
+            qBot.observe(-1, caption=caption, captionLens=captionLens)
 
-        predFeatures = qBot.predictImage()
-        roundwiseFeaturePreds[0].append(predFeatures)
-
-        for round in range(numRounds):
-            questions, quesLens = qBot.forwardDecode(
-                inference='greedy', beamSize=beamSize)
-            qBot.observe(round, ques=questions, quesLens=quesLens)
-            aBot.observe(round, ques=questions, quesLens=quesLens)
-            answers, ansLens = aBot.forwardDecode(
-                inference='greedy', beamSize=beamSize)
-            aBot.observe(round, ans=answers, ansLens=ansLens)
-            qBot.observe(round, ans=answers, ansLens=ansLens)
             predFeatures = qBot.predictImage()
-            roundwiseFeaturePreds[round + 1].append(predFeatures)
-        gtImgFeatures.append(gtFeatures)
+            roundwiseFeaturePreds[0].append(predFeatures)
 
-        end_t = timer()
-        delta_t = " Rate: %5.2fs" % (end_t - start_t)
-        start_t = end_t
-        progressString = "\r[Qbot] Evaluating split '%s' [%d/%d]\t" + delta_t
-        sys.stdout.write(progressString % (split, idx + 1, numBatches))
-        sys.stdout.flush()
+            for round in range(numRounds):
+                questions, quesLens = qBot.forwardDecode(
+                    inference='greedy', beamSize=beamSize)
+                qBot.observe(round, ques=questions, quesLens=quesLens)
+                aBot.observe(round, ques=questions, quesLens=quesLens)
+                answers, ansLens = aBot.forwardDecode(
+                    inference='greedy', beamSize=beamSize)
+                aBot.observe(round, ans=answers, ansLens=ansLens)
+                qBot.observe(round, ans=answers, ansLens=ansLens)
+                predFeatures = qBot.predictImage()
+                roundwiseFeaturePreds[round + 1].append(predFeatures)
+            gtImgFeatures.append(gtFeatures)
+
+            end_t = timer()
+            delta_t = " Rate: %5.2fs" % (end_t - start_t)
+            start_t = end_t
+            progressString = "\r[Qbot] Evaluating split '%s' [%d/%d]\t" + delta_t
+            sys.stdout.write(progressString % (split, idx + 1, numBatches))
+            sys.stdout.flush()
     sys.stdout.write("\n")
 
     gtFeatures = torch.cat(gtImgFeatures, 0).data.cpu().numpy()
