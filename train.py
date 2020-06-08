@@ -241,7 +241,7 @@ for epochId, idx, batch in batch_iter(dataloader):
                 ansLens=gtAnsLens[:, round])
             ansLogProbs = aBot.forward()
             # Cross Entropy (CE) Loss for Ground Truth Answers
-            aBotLoss += utils.maskedNll(ansLogProbs,
+            aBotLoss = aBotLoss + utils.maskedNll(ansLogProbs,
                                         gtAnswers[:, round].contiguous())
 
         # Questioner Forward Pass (dialog model)
@@ -253,7 +253,7 @@ for epochId, idx, batch in batch_iter(dataloader):
                 quesLens=gtQuesLens[:, round])
             quesLogProbs = qBot.forward()
             # Cross Entropy (CE) Loss for Ground Truth Questions
-            qBotLoss += utils.maskedNll(quesLogProbs,
+            qBotLoss = qBotLoss + utils.maskedNll(quesLogProbs,
                                         gtQuestions[:, round].contiguous())
             # Observe GT answer for updating dialog history
             qBot.observe(
@@ -272,7 +272,7 @@ for epochId, idx, batch in batch_iter(dataloader):
             predFeatures = qBot.predictImage()
             featDist = mse_criterion(predFeatures, image)
             featDist = torch.mean(featDist)
-            featLoss += featDist
+            featLoss = featLoss + featDist
 
         # A-Bot and Q-Bot interacting in RL rounds
         if params['trainMode'] == 'rl-full-QAf' and round >= rlRound:
@@ -297,8 +297,8 @@ for epochId, idx, batch in batch_iter(dataloader):
             qBotRLLoss = qBot.reinforce(reward)
             if params['rlAbotReward']:
                 aBotRLLoss = aBot.reinforce(reward)
-            rlLoss += torch.mean(aBotRLLoss)
-            rlLoss += torch.mean(qBotRLLoss)
+            rlLoss = rlLoss + torch.mean(aBotRLLoss)
+            rlLoss = rlLoss + torch.mean(qBotRLLoss)
 
     # Loss coefficients
     rlCoeff = 1
