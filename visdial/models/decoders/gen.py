@@ -40,15 +40,12 @@ class Decoder(nn.Module):
         '''
         Given encoder states, forward pass an input sequence 'inputSeq' to
         compute its log likelihood under the current decoder RNN state.
-
         Arguments:
             encStates: (H, C) Tuple of hidden and cell encoder states
             inputSeq: Input sequence for computing log probabilities
-
         Output:
             A (batchSize, length, vocabSize) sized tensor of log-probabilities
             obtained from feeding 'inputSeq' to decoder RNN at evert time step
-
         Note:
             Maximizing the NLL of an input sequence involves feeding as input
             tokens from the GT (ground truth) sequence at every time step and
@@ -75,7 +72,6 @@ class Decoder(nn.Module):
         '''
         Decode a sequence of tokens given an encoder state, using either
         sampling or greedy inference.
-
         Arguments:
             encStates : (H, C) Tuple of hidden and cell encoder states
             maxSeqLen : Maximum length of token sequence to generate
@@ -84,7 +80,6 @@ class Decoder(nn.Module):
                 'greedy' - Always choose the word with highest probability
                            if beam size is 1, otherwise use beam search.
             beamSize  : Beam search width
-
         Notes:
             * This function is not called during SL pre-training
             * Greedy inference is used for evaluation
@@ -197,17 +192,14 @@ class Decoder(nn.Module):
     def evalOptions(self, encStates, options, optionLens, scoringFunction):
         '''
         Forward pass a set of candidate options to get log probabilities
-
         Arguments:
             encStates : (H, C) Tuple of hidden and cell encoder states
             options   : (batchSize, numOptions, maxSequenceLength) sized
                         tensor with <START> and <END> tokens
-
             scoringFunction : A function which computes negative log
                               likelihood of a sequence (answer) given log
                               probabilities under an RNN model. Currently
                               utils.maskedNll is the only such function used.
-
         Output:
             A (batchSize, numOptions) tensor containing the score
             of each option sentence given by the generator
@@ -228,7 +220,6 @@ class Decoder(nn.Module):
         '''
         Compute loss using REINFORCE on log probabilities of tokens
         sampled from decoder RNN, scaled by input 'reward'.
-
         Note that an earlier call to forwardDecode must have been
         made in order to have samples for which REINFORCE can be
         applied. These samples are stored in 'self.saved_log_probs'.
@@ -246,7 +237,6 @@ class Decoder(nn.Module):
     def beamSearchDecoder(self, initStates, beamSize, maxSeqLen):
         '''
         Beam search for sequence generation
-
         Arguments:
             initStates - Initial encoder states tuple
             beamSize - Beam Size
