@@ -1,4 +1,6 @@
-# Visdial-RL-PyTorch
+# Visdial-RL-PyTorch-1.5
+
+**This version of the repo upgrades the original Visdial repo which was written for PyTorch 0.3.5 to support more recent versions of PyTorch, specifically targetted at 1.5.0**
 
 PyTorch implementation of the paper:
 
