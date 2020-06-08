@@ -248,11 +248,8 @@ def maskedNll(seq, gtSeq, returnScores=False):
     target = torch.cat([gtSeq, padColumn], dim=1)[:, 1:]
 
     # Generate a mask of non-padding (non-zero) tokens
-    mask = target.data.gt(0)
+    mask = target.gt(0)
     loss = 0
-    if isinstance(gtSeq, Variable):
-        mask = Variable(mask, volatile=gtSeq.volatile)
-    assert isinstance(target, Variable)
     gtLogProbs = torch.gather(seq, 2, target.unsqueeze(2)).squeeze(2)
     # Mean sentence probs:
     # gtLogProbs = gtLogProbs/(mask.float().sum(1).view(-1,1))
