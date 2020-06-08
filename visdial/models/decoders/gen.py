@@ -1,4 +1,3 @@
-# visdial / models / decoders / gen
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -157,21 +156,21 @@ class Decoder(nn.Module):
 
             # Compensating for removed padding token prediction earlier
             sample = sample + 1  # Incrementing all token indices by 1
-
+            sample.data = sample.data
             self.samples.append(sample)
-            seq.data[:, t + 1] = sample.data
+            seq.data[:, t + 1] = sample.data.squeeze(-1)
             # Marking spots where <END> token is generated
-            mask[:, t] = sample.data.eq(END_TOKEN_IDX)
+            mask[:, t] = sample.data.squeeze(-1).eq(END_TOKEN_IDX)
 
             # Compensating for shift in <END> token index
-            sample.data.masked_fill_(mask[:, t].unsqueeze(1), self.endToken)
+            sample.data.masked_fill_(mask[:, t].unsqueeze(1).bool(), self.endToken)
 
         mask[:, maxLen - 1].fill_(1)
 
         # Computing lengths of generated sequences
         for t in range(maxLen):
             # Zero out the spots where end token is reached
-            unitColumn.masked_fill_(mask[:, t], 0)
+            unitColumn.masked_fill_(mask[:, t].bool(), 0)
             # Update mask
             mask[:, t] = unitColumn
             # Add +1 length to all un-ended sequences
@@ -353,12 +352,12 @@ class Decoder(nn.Module):
                 mask_[:, :,
                       0] = 0  # Zeroing all except first row for ended beams
                 minus_infinity_ = torch.min(logProbs).data[0]
-                logProbs.data.masked_fill_(mask_.data, minus_infinity_)
+                logProbs.data.masked_fill_(mask_.data.bool(), minus_infinity_)
 
                 logProbs = logProbs.view(batchSize, -1)
                 tokensArray = tokenArange.unsqueeze(0).unsqueeze(0).\
                                 repeat(batchSize,beamSize,1)
-                tokensArray.masked_fill_(aliveVector.eq(0), self.endToken)
+                tokensArray.masked_fill_(aliveVector.eq(0).bool(), self.endToken)
                 tokensArray = tokensArray.view(batchSize, -1)
                 backIndexArray = backVector.unsqueeze(2).\
                                 repeat(1,1,self.vocabSize).view(batchSize,-1)
