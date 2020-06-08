@@ -55,7 +55,7 @@ def dialogDump(params,
     to_str_gt = lambda w: str(" ".join([ind2word[x] for x in filter(lambda x:\
                     x>0,w.data.cpu().numpy())])) #.encode('utf-8','ignore')
     to_str_pred = lambda w, l: str(" ".join([ind2word[x] for x in list( filter(
-        lambda x:x>0,w.data.cpu().numpy()))][:l.data.cpu()[0]])) #.encode('utf-8','ignore')
+        lambda x:x>0,w.data.cpu().numpy()))][:l.data.cpu().item()])) #.encode('utf-8','ignore')
 
     dataloader = DataLoader(
         dataset,
