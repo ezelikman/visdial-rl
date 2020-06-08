@@ -125,8 +125,8 @@ def rankABot(aBot, dataset, split, scoringFunction, exampleLimit=None):
     ranks = torch.cat(ranks, 0)
     rankMetrics = metrics.computeMetrics(ranks.cpu())
 
-    logProbsAll = [torch.cat(lprobs, 0).mean() for lprobs in logProbsAll]
-    roundwiseLogProbs = torch.cat(logProbsAll, 0).data.cpu().numpy()
+    logProbsAll = [torch.stack(lprobs, 0).mean() for lprobs in logProbsAll]
+    roundwiseLogProbs = torch.stack(logProbsAll, 0).data.cpu().numpy()
     logProbsMean = roundwiseLogProbs.mean()
     rankMetrics['logProbsMean'] = logProbsMean
 
