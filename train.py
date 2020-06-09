@@ -20,6 +20,11 @@ from eval_utils.rank_questioner import rankQBot
 from utils import utilities as utils
 from utils.visualize import VisdomVisualize
 
+INNER_SPEECH_LENGTH = 3
+def prepend(output):
+    prepad = torch.zeros(output.shape[0], INNER_SPEECH_LENGTH).type_as(output)
+    return torch.cat([prepad, output], dim=1)
+
 #---------------------------------------------------------------------------------------
 # Setup
 #---------------------------------------------------------------------------------------
@@ -237,9 +242,10 @@ for epochId, idx, batch in batch_iter(dataloader):
             # Observe GT answer for teacher forcing
             aBot.observe(
                 round,
-                ans=gtAnswers[:, round],
-                ansLens=gtAnsLens[:, round])
+                ans=prepend(gtAnswers[:, round]),
+                ansLens=gtAnsLens[:, round] + INNER_SPEECH_LENGTH)
             ansLogProbs = aBot.forward()
+            ansLogProbs = ansLogProbs[:, INNER_SPEECH_LENGTH:]
             # Cross Entropy (CE) Loss for Ground Truth Answers
             aBotLoss = aBotLoss + utils.maskedNll(ansLogProbs,
                                         gtAnswers[:, round].contiguous())
@@ -249,9 +255,10 @@ for epochId, idx, batch in batch_iter(dataloader):
             # Observe GT question for teacher forcing
             qBot.observe(
                 round,
-                ques=gtQuestions[:, round],
-                quesLens=gtQuesLens[:, round])
+                ques=prepend(gtQuestions[:, round]),
+                quesLens=gtQuesLens[:, round] + INNER_SPEECH_LENGTH)
             quesLogProbs = qBot.forward()
+            quesLogProbs = quesLogProbs[:, INNER_SPEECH_LENGTH:]
             # Cross Entropy (CE) Loss for Ground Truth Questions
             qBotLoss = qBotLoss + utils.maskedNll(quesLogProbs,
                                         gtQuestions[:, round].contiguous())
@@ -279,10 +286,10 @@ for epochId, idx, batch in batch_iter(dataloader):
             # Run one round of conversation
             questions, quesLens = qBot.forwardDecode(inference='sample')
             qBot.observe(round, ques=questions, quesLens=quesLens)
-            aBot.observe(round, ques=questions, quesLens=quesLens)
+            aBot.observe(round, ques=prepend(questions[:, INNER_SPEECH_LENGTH:]), quesLens=quesLens)
             answers, ansLens = aBot.forwardDecode(inference='sample')
             aBot.observe(round, ans=answers, ansLens=ansLens)
-            qBot.observe(round, ans=answers, ansLens=ansLens)
+            qBot.observe(round, ans=prepend(answers[:, INNER_SPEECH_LENGTH:]), ansLens=ansLens)
 
             # Q-Bot makes a guess at the end of each round
             predFeatures = qBot.predictImage()

@@ -17,6 +17,10 @@ from sklearn.metrics.pairwise import pairwise_distances
 
 from six.moves import range
 
+INNER_SPEECH_LENGTH = 3
+def prepend(output):
+    prepad = torch.zeros(output.shape[0], INNER_SPEECH_LENGTH).type_as(output)
+    return torch.cat([prepad, output], dim=1)
 
 def dialogDump(params,
                dataset,
@@ -97,10 +101,10 @@ def dialogDump(params,
         if aBot:
             aBot.eval(), aBot.reset()
             aBot.observe(
-                -1, image=image, caption=caption, captionLens=captionLens)
+                -1, image=image, caption=prepend(caption), captionLens=captionLens + INNER_SPEECH_LENGTH)
         if qBot:
             qBot.eval(), qBot.reset()
-            qBot.observe(-1, caption=caption, captionLens=captionLens)
+            qBot.observe(-1, caption=prepend(caption), captionLens=captionLens + INNER_SPEECH_LENGTH)
         questions = []
 
         for j in range(batchSize):
@@ -115,8 +119,8 @@ def dialogDump(params,
                     quesLens=gtQuesLens[:, round])
                 aBot.observe(
                     round,
-                    ans=gtAnswers[:, round],
-                    ansLens=gtAnsLens[:, round])
+                    ans=prepend(gtAnswers[:, round]),
+                    ansLens=gtAnsLens[:, round] + INNER_SPEECH_LENGTH)
                 _ = aBot.forward()
                 answers, ansLens = aBot.forwardDecode(
                     inference='greedy', beamSize=beamSize)
@@ -124,12 +128,12 @@ def dialogDump(params,
             elif aBot is not None and qBot is not None:
                 questions, quesLens = qBot.forwardDecode(
                     beamSize=beamSize, inference='greedy')
+                print(prepend(questions[:, INNER_SPEECH_LENGTH:]))
                 qBot.observe(round, ques=questions, quesLens=quesLens)
-                aBot.observe(round, ques=questions, quesLens=quesLens)
-                answers, ansLens = aBot.forwardDecode(
-                    beamSize=beamSize, inference='greedy')
+                aBot.observe(round, ques=prepend(questions[:, INNER_SPEECH_LENGTH:]), quesLens=quesLens)
+                answers, ansLens = aBot.forwardDecode(inference='greedy', beamSize=beamSize)
                 aBot.observe(round, ans=answers, ansLens=ansLens)
-                qBot.observe(round, ans=answers, ansLens=ansLens)
+                qBot.observe(round, ans=prepend(answers[:, INNER_SPEECH_LENGTH:]), ansLens=ansLens)
 
             for j in range(batchSize):
                 question_str = to_str_pred(questions[j], quesLens[j]) \
